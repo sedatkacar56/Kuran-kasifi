@@ -76,10 +76,15 @@ position:absolute;
 background:#0D1A10;
 color:white;
 border:1px solid #D4A843;
-padding:10px;
+border-radius:6px;
+padding:12px 16px;
 display:none;
-max-width:200px;
+max-width:300px;
 font-size:14px;
+line-height:1.8;
+pointer-events:none;
+box-shadow:0 4px 20px rgba(0,0,0,0.5);
+text-align:right;
 }
 
 button{
@@ -126,6 +131,7 @@ K U R A N &nbsp; K A Ş İ F İ
 
 let verses=[]
 let wordCache={}
+let currentTurkish=""
 
 const SURE_ISIMLERI = {
     1:"Fâtiha",2:"Bakara",3:"Âl-i İmrân",4:"Nisâ",5:"Mâide",
@@ -313,6 +319,8 @@ SURE_KONULARI[v.surah] || ""
 document.getElementById("turkish").innerText=
 '"'+v.turkish+'"'
 
+currentTurkish = v.turkish
+
 let key=v.surah+":"+v.ayah
 
 let words=await fetchWords(key)
@@ -332,9 +340,37 @@ let data=await r.json()
 
 let words=data.verse.words.filter(w=>w.char_type_name=="word")
 
+// Collect all English word meanings and translate them to Turkish in one API call
+let englishMeanings = words.map(w => w.translation?.text || "").filter(Boolean)
+
+if(englishMeanings.length){
+  let turkishMeanings = await translateWordsToTurkish(englishMeanings)
+  let trIndex = 0
+  words.forEach(w => {
+    if(w.translation?.text){
+      w.turkishMeaning = turkishMeanings[trIndex++] || ""
+    }
+  })
+}
+
 wordCache[key]=words
 return words
 
+}
+
+async function translateWordsToTurkish(wordList){
+try {
+  const results = await Promise.all(wordList.map(async word => {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=tr&dt=t&q=${encodeURIComponent(word)}`
+    const r = await fetch(url)
+    const data = await r.json()
+    return data[0][0][0]
+  }))
+  return results
+} catch(e) {
+  console.error("Translation error:", e)
+  return []
+}
 }
 
 function renderArabic(words){
@@ -362,9 +398,9 @@ function showTooltip(e,w){
 let t=document.getElementById("tooltip")
 
 t.innerHTML=
-"<b>"+w.text_uthmani+"</b><br>"+
-(w.transliteration?.text || "")+"<br>"+
-(w.translation?.text || "")
+"<b style='font-family:Amiri;font-size:22px;direction:rtl;display:block;margin-bottom:4px'>"+w.text_uthmani+"</b>"+
+"<span style='color:#D4A843;font-size:12px;display:block;margin-bottom:6px'>"+(w.transliteration?.text || "")+"</span>"+
+"<span style='color:#EAE8E0;font-size:15px;font-weight:bold'>"+(w.turkishMeaning || "...")+"</span>"
 
 t.style.left=e.pageX+"px"
 t.style.top=(e.pageY-40)+"px"
